@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Sistema de Controle de Estoque - DNLSOFT</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div class="container">
+        <header style="position: relative;">
+            <h1>📦 Sistema de Controle de Estoque</h1>
+            <p>Gerencie entradas, saídas e movimentações</p>
+        </header>
+
+        <!-- Botões de navegação -->
+        <div class="nav-buttons" style="display: none;">
+            <button class="nav-btn active" data-page="dashboard">
+                <span class="icon">📊</span> Dashboard
+            </button>
+            <button class="nav-btn" data-page="produtos">
+                <span class="icon">📦</span> Produtos
+            </button>
+            <button class="nav-btn" data-page="fornecedores">
+                <span class="icon">🏢</span> Fornecedores
+            </button>
+            <button class="nav-btn" data-page="entrada">
+                <span class="icon">📥</span> Entrada (Nota Fiscal)
+            </button>
+            <button class="nav-btn" data-page="saida">
+                <span class="icon">📤</span> Saída (Romaneio)
+            </button>
+            <button class="nav-btn" data-page="consultar">
+                <span class="icon">🔍</span> Consultar Documentos
+            </button>
+            <button class="nav-btn" data-page="movimentacoes">
+                <span class="icon">📊</span> Movimentações
+            </button>
+        </div>
+
+        <!-- Conteúdo principal com scroll -->
+        <main id="conteudo-principal" class="conteudo-scroll">
+            <div class="loading">Carregando...</div>
+        </main>
+
+        <!-- Rodapé -->
+        <footer class="footer">
+            <div class="footer-content">
+                <div class="footer-info">
+                    <strong>DNLSOFT</strong> - Sistema de Controle de Estoque
+                </div>
+                <div class="footer-contato">
+                    📞 <a href="tel:5581973162509">(81) 97316-2509</a>
+                </div>
+                <div class="footer-copyright">
+                    © 2026 DNLSOFT - Todos os direitos reservados
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // Inicializar Supabase
+        const SUPABASE_URL = 'https://qudqijxlxnkwfgyvdgus.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_4MpR9cq9MVjz-MG25ccU8g_Ovp6fEX_';
+        window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        
+        // Funções globais
+        window.showMessage = function(message, type = 'success') {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `alert alert-${type}`;
+            msgDiv.innerHTML = message;
+            msgDiv.style.position = 'fixed';
+            msgDiv.style.top = '20px';
+            msgDiv.style.right = '20px';
+            msgDiv.style.zIndex = '9999';
+            msgDiv.style.maxWidth = '400px';
+            document.body.appendChild(msgDiv);
+            
+            setTimeout(() => {
+                msgDiv.remove();
+            }, 3000);
+        };
+
+        window.formatMoney = function(value) {
+            if (!value) return 'R$ 0,00';
+            return new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL'
+            }).format(value);
+        };
+
+        window.formatDate = function(date) {
+            if (!date) return '-';
+            return new Date(date).toLocaleDateString('pt-BR');
+        };
+
+        window.formatDateTime = function(date) {
+            if (!date) return '-';
+            return new Date(date).toLocaleString('pt-BR');
+        };
+        
+        // Navegação
+        function carregarPagina(pagina) {
+            // Atualizar botão ativo
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.getAttribute('data-page') === pagina) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            // Mostrar loading
+            const main = document.getElementById('conteudo-principal');
+            main.innerHTML = '<div class="loading">Carregando...</div>';
+            
+            // Carregar conteúdo
+            setTimeout(() => {
+                switch(pagina) {
+                    case 'dashboard':
+                        if (typeof carregarDashboard === 'function') carregarDashboard();
+                        break;
+                    case 'produtos':
+                        if (typeof carregarProdutos === 'function') carregarProdutos();
+                        break;
+                    case 'fornecedores':
+                        if (typeof carregarFornecedores === 'function') carregarFornecedores();
+                        break;
+                    case 'entrada':
+                        if (typeof carregarEntrada === 'function') carregarEntrada();
+                        break;
+                    case 'saida':
+                        if (typeof carregarSaida === 'function') carregarSaida();
+                        break;
+                    case 'consultar':
+                        if (typeof carregarConsultar === 'function') carregarConsultar();
+                        break;
+                    case 'movimentacoes':
+                        if (typeof carregarMovimentacoes === 'function') carregarMovimentacoes();
+                        break;
+                    default:
+                        main.innerHTML = '<div class="card">Página não encontrada</div>';
+                }
+            }, 100);
+        }
+        
+        // Adicionar eventos aos botões
+        document.addEventListener('DOMContentLoaded', async () => {
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const page = btn.getAttribute('data-page');
+                    carregarPagina(page);
+                });
+            });
+            
+            // Verificar autenticação
+            await verificarAutenticacao();
+        });
+    </script>
+    
+    <script src="js/login.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/produtos.js"></script>
+    <script src="js/fornecedores.js"></script>
+    <script src="js/entrada.js"></script>
+    <script src="js/saida.js"></script>
+    <script src="js/consultar.js"></script>
+    <script src="js/movimentacoes.js"></script>
+    <script src="js/backup.js"></script>
+</body>
+</html>
