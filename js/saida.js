@@ -39,8 +39,7 @@ async function carregarSaida() {
         <h1 style="margin-bottom: 20px;">📤 Saída de Romaneio</h1>
         
         <div class="instrucao">
-            💡 Digite o código do produto e pressione ENTER. O sistema mostra o estoque atual baseado nas movimentações.<br>
-            📦 <strong>Para produtos por peso (KG):</strong> Use números decimais (ex: 1.5, 0.750, 2.3)
+            💡 Digite o código do produto e pressione ENTER. O sistema mostra o estoque atual baseado nas movimentações.
         </div>
         
         <div class="card">
@@ -126,7 +125,7 @@ async function buscarProdutoSaida(itemId) {
         // Buscar o produto
         const { data: produto } = await window.supabaseClient
             .from('produtos')
-            .select('id, nome, preco_venda, unidade_medida')
+            .select('id, nome, preco_venda')
             .eq('codigo_interno', codigo.toUpperCase().trim())
             .maybeSingle();
         
@@ -150,15 +149,11 @@ async function buscarProdutoSaida(itemId) {
         document.getElementById(`prod-id-${itemId}`).value = produto.id;
         document.getElementById(`preco-${itemId}`).value = produto.preco_venda || 0;
         
-        let unidadeTexto = produto.unidade_medida || 'UN';
-        if (unidadeTexto === 'KG') unidadeTexto = 'KG';
-        else if (unidadeTexto === 'LT') unidadeTexto = 'LT';
-        
         if (estoqueAtual <= 0) {
-            infoDiv.innerHTML = `⚠️ ${produto.nome} - SEM ESTOQUE! (0 ${unidadeTexto} disponível)`;
+            infoDiv.innerHTML = `⚠️ ${produto.nome} - SEM ESTOQUE! (0 disponível)`;
             infoDiv.className = 'info-produto info-alerta';
         } else {
-            infoDiv.innerHTML = `✅ ${produto.nome} | Estoque: ${estoqueAtual} ${unidadeTexto} | Preço: ${formatMoney(produto.preco_venda)}`;
+            infoDiv.innerHTML = `✅ ${produto.nome} | Estoque: ${estoqueAtual} | Preço: ${formatMoney(produto.preco_venda)}`;
             infoDiv.className = 'info-produto info-sucesso';
             document.getElementById(`qtd-${itemId}`).focus();
         }
