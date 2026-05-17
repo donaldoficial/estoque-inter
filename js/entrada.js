@@ -376,19 +376,21 @@ async function salvarNotaFiscal() {
         
         // Processar cada item
         for (const item of itens) {
-            // Inserir item da nota
-            await window.supabaseClient
+            // Inserir item da nota - CORRIGIDO (convertendo para número)
+            const { error: itemError } = await window.supabaseClient
                 .from('nota_itens')
                 .insert([{
                     nota_id: notaId,
                     produto_id: item.produto_id,
-                    quantidade: item.quantidade,
-                    preco_unitario: item.preco_unitario,
-                    subtotal: item.subtotal,
-                    data_fabricacao: item.data_fabricacao,
-                    data_validade: item.data_validade,
-                    terco_recebimento: item.terco_recebimento
+                    quantidade: Number(item.quantidade),
+                    preco_unitario: Number(item.preco_unitario),
+                    subtotal: Number(item.subtotal),
+                    data_fabricacao: item.data_fabricacao || null,
+                    data_validade: item.data_validade || null,
+                    terco_recebimento: Number(item.terco_recebimento) || 1
                 }]);
+            
+            if (itemError) throw itemError;
             
             // Buscar o ÚLTIMO SALDO (estoque atual real)
             const { data: ultimaMov } = await window.supabaseClient
@@ -399,27 +401,31 @@ async function salvarNotaFiscal() {
                 .limit(1)
                 .maybeSingle();
             
-            const ultimoSaldo = ultimaMov?.saldo_apos || 0;
-            const novoEstoque = ultimoSaldo + item.quantidade;
+            const ultimoSaldo = Number(ultimaMov?.saldo_apos) || 0;
+            const novoEstoque = ultimoSaldo + Number(item.quantidade);
             
             // Atualizar estoque do produto
-            await window.supabaseClient
+            const { error: updateError } = await window.supabaseClient
                 .from('produtos')
                 .update({ estoque_atual: novoEstoque })
                 .eq('id', item.produto_id);
             
+            if (updateError) throw updateError;
+            
             // Registrar movimentação
-            await window.supabaseClient
+            const { error: movError } = await window.supabaseClient
                 .from('movimentacoes')
                 .insert({
                     produto_id: item.produto_id,
                     tipo: 'entrada',
                     documento_tipo: 'nota_fiscal',
                     documento_id: notaId,
-                    quantidade: item.quantidade,
+                    quantidade: Number(item.quantidade),
                     saldo_apos: novoEstoque,
                     observacao: `Entrada NF ${numero_nota}`
                 });
+            
+            if (movError) throw movError;
         }
         
         showMessage('✅ Nota fiscal registrada com sucesso!', 'success');
@@ -430,7 +436,7 @@ async function salvarNotaFiscal() {
         adicionarItemNota();
         
     } catch (error) {
-        console.error('Erro:', error);
+        console.error('Erro detalhado:', error);
         showMessage('Erro ao salvar: ' + error.message, 'error');
     }
 }
