@@ -1,3 +1,8 @@
+// Função para arredondar decimais
+function arredondar(valor) {
+    return Math.round(valor * 1000) / 1000;
+}
+
 async function carregarSaida() {
     const main = document.getElementById('conteudo-principal');
     
@@ -39,7 +44,9 @@ async function carregarSaida() {
         <h1 style="margin-bottom: 20px;">📤 Saída de Romaneio</h1>
         
         <div class="instrucao">
-            💡 Digite o código do produto e pressione ENTER. O sistema mostra o estoque atual baseado nas movimentações.
+            💡 Digite o código do produto e pressione ENTER. O sistema mostra o estoque atual.<br>
+            📦 <strong>Para KG (peso):</strong> Use decimais (1.5, 2.58)<br>
+            📦 <strong>Para UN (unidade):</strong> Use números inteiros (1, 2, 3)
         </div>
         
         <div class="card">
@@ -122,10 +129,9 @@ async function buscarProdutoSaida(itemId) {
     infoDiv.className = 'info-produto';
     
     try {
-        // Buscar o produto
         const { data: produto } = await window.supabaseClient
             .from('produtos')
-            .select('id, nome, preco_venda')
+            .select('id, nome, preco_venda, unidade_medida')
             .eq('codigo_interno', codigo.toUpperCase().trim())
             .maybeSingle();
         
@@ -135,7 +141,6 @@ async function buscarProdutoSaida(itemId) {
             return;
         }
         
-        // Buscar o ÚLTIMO SALDO da movimentação deste produto (estoque real)
         const { data: ultimaMov } = await window.supabaseClient
             .from('movimentacoes')
             .select('saldo_apos')
@@ -149,11 +154,14 @@ async function buscarProdutoSaida(itemId) {
         document.getElementById(`prod-id-${itemId}`).value = produto.id;
         document.getElementById(`preco-${itemId}`).value = produto.preco_venda || 0;
         
+        let unidadeTexto = produto.unidade_medida || 'UN';
+        let tipoTexto = unidadeTexto === 'KG' ? ' (use decimais)' : ' (use números inteiros)';
+        
         if (estoqueAtual <= 0) {
-            infoDiv.innerHTML = `⚠️ ${produto.nome} - SEM ESTOQUE! (0 disponível)`;
+            infoDiv.innerHTML = `⚠️ ${produto.nome} - SEM ESTOQUE! (0 ${unidadeTexto} disponível)`;
             infoDiv.className = 'info-produto info-alerta';
         } else {
-            infoDiv.innerHTML = `✅ ${produto.nome} | Estoque: ${estoqueAtual} | Preço: ${formatMoney(produto.preco_venda)}`;
+            infoDiv.innerHTML = `✅ ${produto.nome} | Estoque: ${estoqueAtual} ${unidadeTexto} | Preço: ${formatMoney(produto.preco_venda)}${tipoTexto}`;
             infoDiv.className = 'info-produto info-sucesso';
             document.getElementById(`qtd-${itemId}`).focus();
         }
@@ -181,7 +189,6 @@ async function salvarRomaneio() {
         return;
     }
     
-    // Verificar duplicidade do romaneio
     const { data: existente } = await window.supabaseClient
         .from('romaneios')
         .select('id')
@@ -193,7 +200,6 @@ async function salvarRomaneio() {
         return;
     }
     
-    // Coletar itens válidos
     const itens = [];
     let valorTotal = 0;
     
@@ -204,27 +210,45 @@ async function salvarRomaneio() {
         
         if (!produtoId) continue;
         
-        const quantidade = parseFloat(qtdInput?.value) || 0;
+        // Buscar unidade do produto
+        const { data: produtoInfo } = await window.supabaseClient
+            .from('produtos')
+            .select('unidade_medida, nome')
+            .eq('id', parseInt(produtoId))
+            .single();
+        
+        let quantidadeStr = qtdInput?.value;
+        if (quantidadeStr) {
+            quantidadeStr = quantidadeStr.toString().replace(',', '.');
+        }
+        let quantidade = parseFloat(quantidadeStr) || 0;
+        
+        // SE FOR UNIDADE (UN), FORÇA NÚMERO INTEIRO
+        if (produtoInfo && produtoInfo.unidade_medida === 'UN') {
+            quantidade = Math.round(quantidade);
+            if (quantidade <= 0) continue;
+        } else {
+            // Para KG, LT, MT - mantém decimal
+            if (quantidade <= 0) continue;
+        }
+        
         const preco = parseFloat(precoInput?.value) || 0;
         
-        if (quantidade <= 0) continue;
-        
         if (preco <= 0) {
-            showMessage('Produto sem preço de venda cadastrado!', 'error');
+            showMessage(`Produto ${produtoInfo?.nome || ''} sem preço de venda!`, 'error');
             return;
         }
         
-        // Buscar o ÚLTIMO SALDO da movimentação (estoque real)
         const { data: ultimaMov } = await window.supabaseClient
             .from('movimentacoes')
-            .select('saldo_apos, produtos(nome)')
+            .select('saldo_apos')
             .eq('produto_id', parseInt(produtoId))
             .order('data_movimento', { ascending: false })
             .limit(1)
             .maybeSingle();
         
         const estoqueAtual = ultimaMov?.saldo_apos || 0;
-        const nomeProduto = ultimaMov?.produtos?.nome || 'Produto';
+        const nomeProduto = produtoInfo?.nome || 'Produto';
         
         if (quantidade > estoqueAtual) {
             showMessage(`❌ Estoque insuficiente para ${nomeProduto}! Disponível: ${estoqueAtual}`, 'error');
@@ -247,7 +271,6 @@ async function salvarRomaneio() {
     }
     
     try {
-        // Salvar romaneio
         const { data: romaneio, error: romaneioError } = await window.supabaseClient
             .from('romaneios')
             .insert([{ numero_romaneio, motorista, observacao, valor_total: valorTotal }])
@@ -257,9 +280,7 @@ async function salvarRomaneio() {
         
         const romaneioId = romaneio[0].id;
         
-        // Processar cada item
         for (const item of itens) {
-            // Salvar item do romaneio
             await window.supabaseClient
                 .from('romaneio_itens')
                 .insert([{
@@ -270,12 +291,8 @@ async function salvarRomaneio() {
                     subtotal: item.subtotal
                 }]);
             
-            // =============================================
-            // DAR BAIXA NAS NOTAS (FIFO - mais antiga primeiro)
-            // =============================================
             let quantidadeRestante = item.quantidade;
             
-            // Buscar entradas (nota_itens) em ordem cronológica (mais antiga primeiro)
             const { data: entradas } = await window.supabaseClient
                 .from('nota_itens')
                 .select('*')
@@ -297,24 +314,19 @@ async function salvarRomaneio() {
                     quantidadeRestante -= quantidadeEntrada;
                 }
                 
-                // Atualizar a quantidade na nota
                 await window.supabaseClient
                     .from('nota_itens')
                     .update({ quantidade: novaQuantidadeEntrada })
                     .eq('id', entrada.id);
             }
-            // =============================================
             
-            // Calcular novo estoque
             const novoEstoque = item.estoque_atual - item.quantidade;
             
-            // Atualizar o produto
             await window.supabaseClient
                 .from('produtos')
                 .update({ estoque_atual: novoEstoque })
                 .eq('id', item.produto_id);
             
-            // Registrar movimentação
             await window.supabaseClient
                 .from('movimentacoes')
                 .insert({
