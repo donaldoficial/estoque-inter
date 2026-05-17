@@ -57,7 +57,8 @@ async function carregarEntrada() {
             💡 <strong>Controle de Validade:</strong> Preencha a data de FABRICAÇÃO e VALIDADE para ativar o controle de 3 Terços.<br>
             • 🟢 1º Terço: Produto dentro da validade - PODE RECEBER<br>
             • 🟡 2º Terço: Produto com alerta - PODE RECEBER COM ATENÇÃO<br>
-            • 🔴 3º Terço: Produto NÃO PODE SER RECEBIDO (bloqueado)
+            • 🔴 3º Terço: Produto NÃO PODE SER RECEBIDO (bloqueado)<br>
+            📦 <strong>Para produtos por peso (KG):</strong> Use números decimais (ex: 1.5, 0.750, 2.3)
         </div>
         
         <div class="card">
@@ -136,7 +137,7 @@ function adicionarItemNota() {
                 <input type="hidden" id="prod-id-${itemId}">
                 <div id="info-${itemId}" class="info-produto"></div>
             </div>
-            <div><input type="number" id="qtd-${itemId}" placeholder="Qtd" step="1" value="1" min="1" style="width:100%;"></div>
+            <div><input type="number" id="qtd-${itemId}" placeholder="Qtd" step="0.001" value="1" min="0" style="width:100%;"></div>
             <div><input type="number" step="0.01" id="preco-${itemId}" placeholder="Preço" readonly style="background:#e9ecef;width:100%;"></div>
             <div><input type="date" id="fab-${itemId}" placeholder="Fabricação" onchange="validarValidade(${itemId})" style="width:100%;"></div>
             <div><input type="date" id="val-${itemId}" placeholder="Validade" onchange="validarValidade(${itemId})" style="width:100%;"></div>
@@ -166,7 +167,7 @@ async function buscarProduto(itemId) {
     try {
         const { data: produto, error } = await window.supabaseClient
             .from('produtos')
-            .select('id, nome, preco_compra, controla_validade')
+            .select('id, nome, preco_compra, controla_validade, unidade_medida')
             .eq('codigo_interno', codigo.toUpperCase().trim())
             .maybeSingle();
         
@@ -180,7 +181,13 @@ async function buscarProduto(itemId) {
         
         document.getElementById(`prod-id-${itemId}`).value = produto.id;
         document.getElementById(`preco-${itemId}`).value = produto.preco_compra || 0;
-        infoDiv.innerHTML = `✅ ${produto.nome} | Preço: ${formatMoney(produto.preco_compra)}`;
+        
+        let unidadeTexto = produto.unidade_medida || 'UN';
+        if (unidadeTexto === 'KG') unidadeTexto = 'KG (peso)';
+        else if (unidadeTexto === 'LT') unidadeTexto = 'LT (litro)';
+        else if (unidadeTexto === 'MT') unidadeTexto = 'MT (metro)';
+        
+        infoDiv.innerHTML = `✅ ${produto.nome} | Preço: ${formatMoney(produto.preco_compra)} | Unidade: ${unidadeTexto}`;
         infoDiv.className = 'info-produto info-sucesso';
         
         if (produto.controla_validade) {
