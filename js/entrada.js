@@ -57,8 +57,7 @@ async function carregarEntrada() {
             💡 <strong>Controle de Validade:</strong> Preencha a data de FABRICAÇÃO e VALIDADE para ativar o controle de 3 Terços.<br>
             • 🟢 1º Terço: Produto dentro da validade - PODE RECEBER<br>
             • 🟡 2º Terço: Produto com alerta - PODE RECEBER COM ATENÇÃO<br>
-            • 🔴 3º Terço: Produto NÃO PODE SER RECEBIDO (bloqueado)<br>
-            📦 <strong>Para produtos por peso (KG):</strong> Use números decimais (ex: 1.5, 0.750, 2.3)
+            • 🔴 3º Terço: Produto NÃO PODE SER RECEBIDO (bloqueado)
         </div>
         
         <div class="card">
@@ -167,7 +166,7 @@ async function buscarProduto(itemId) {
     try {
         const { data: produto, error } = await window.supabaseClient
             .from('produtos')
-            .select('id, nome, preco_compra, controla_validade, unidade_medida')
+            .select('id, nome, preco_compra, controla_validade')
             .eq('codigo_interno', codigo.toUpperCase().trim())
             .maybeSingle();
         
@@ -181,13 +180,7 @@ async function buscarProduto(itemId) {
         
         document.getElementById(`prod-id-${itemId}`).value = produto.id;
         document.getElementById(`preco-${itemId}`).value = produto.preco_compra || 0;
-        
-        let unidadeTexto = produto.unidade_medida || 'UN';
-        if (unidadeTexto === 'KG') unidadeTexto = 'KG (peso)';
-        else if (unidadeTexto === 'LT') unidadeTexto = 'LT (litro)';
-        else if (unidadeTexto === 'MT') unidadeTexto = 'MT (metro)';
-        
-        infoDiv.innerHTML = `✅ ${produto.nome} | Preço: ${formatMoney(produto.preco_compra)} | Unidade: ${unidadeTexto}`;
+        infoDiv.innerHTML = `✅ ${produto.nome} | Preço: ${formatMoney(produto.preco_compra)}`;
         infoDiv.className = 'info-produto info-sucesso';
         
         if (produto.controla_validade) {
@@ -376,21 +369,19 @@ async function salvarNotaFiscal() {
         
         // Processar cada item
         for (const item of itens) {
-            // Inserir item da nota - CORRIGIDO (convertendo para número)
-            const { error: itemError } = await window.supabaseClient
+            // Inserir item da nota
+            await window.supabaseClient
                 .from('nota_itens')
                 .insert([{
                     nota_id: notaId,
                     produto_id: item.produto_id,
-                    quantidade: Number(item.quantidade),
-                    preco_unitario: Number(item.preco_unitario),
-                    subtotal: Number(item.subtotal),
-                    data_fabricacao: item.data_fabricacao || null,
-                    data_validade: item.data_validade || null,
-                    terco_recebimento: Number(item.terco_recebimento) || 1
+                    quantidade: item.quantidade,
+                    preco_unitario: item.preco_unitario,
+                    subtotal: item.subtotal,
+                    data_fabricacao: item.data_fabricacao,
+                    data_validade: item.data_validade,
+                    terco_recebimento: item.terco_recebimento
                 }]);
-            
-            if (itemError) throw itemError;
             
             // Buscar o ÚLTIMO SALDO (estoque atual real)
             const { data: ultimaMov } = await window.supabaseClient
@@ -401,31 +392,27 @@ async function salvarNotaFiscal() {
                 .limit(1)
                 .maybeSingle();
             
-            const ultimoSaldo = Number(ultimaMov?.saldo_apos) || 0;
-            const novoEstoque = ultimoSaldo + Number(item.quantidade);
+            const ultimoSaldo = ultimaMov?.saldo_apos || 0;
+            const novoEstoque = ultimoSaldo + item.quantidade;
             
             // Atualizar estoque do produto
-            const { error: updateError } = await window.supabaseClient
+            await window.supabaseClient
                 .from('produtos')
                 .update({ estoque_atual: novoEstoque })
                 .eq('id', item.produto_id);
             
-            if (updateError) throw updateError;
-            
             // Registrar movimentação
-            const { error: movError } = await window.supabaseClient
+            await window.supabaseClient
                 .from('movimentacoes')
                 .insert({
                     produto_id: item.produto_id,
                     tipo: 'entrada',
                     documento_tipo: 'nota_fiscal',
                     documento_id: notaId,
-                    quantidade: Number(item.quantidade),
+                    quantidade: item.quantidade,
                     saldo_apos: novoEstoque,
                     observacao: `Entrada NF ${numero_nota}`
                 });
-            
-            if (movError) throw movError;
         }
         
         showMessage('✅ Nota fiscal registrada com sucesso!', 'success');
@@ -436,7 +423,7 @@ async function salvarNotaFiscal() {
         adicionarItemNota();
         
     } catch (error) {
-        console.error('Erro detalhado:', error);
+        console.error('Erro:', error);
         showMessage('Erro ao salvar: ' + error.message, 'error');
     }
 }
